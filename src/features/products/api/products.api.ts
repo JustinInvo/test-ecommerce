@@ -20,13 +20,21 @@ import { asCategory } from "../types/product";
  *    + cacheLife/Tag      <- TTL + targeted invalidation
  *    + React cache()      <- per-request memoization (metadata + page share one fetch)
  *
- * Build-time resilience:
- *   FakeStore sometimes 403s build IPs (CI/CD, Vercel, etc.). We refuse to
- *   let a transient upstream issue break a deploy. During the production
- *   build phase only, failures are logged and the function returns an empty
- *   payload so prerender succeeds. At runtime, errors throw normally and are
- *   caught by `error.tsx` boundaries (so users still see a real error UI
- *   with Retry instead of stale empty data).
+ * Resilience policy (build + runtime):
+ *   FakeStore is a public sandbox API and routinely 403s, 5xxs or times out
+ *   from cloud IPs (Vercel, CI/CD). Two-tier policy:
+ *
+ *   - Build phase: ALL fetchers degrade to an empty payload so prerender
+ *     never fails the deploy. Cache fills on first real request.
+ *
+ *   - Runtime: catalog-shaped fetchers (`getCategories`, `getAllProducts`)
+ *     also degrade to empty - they back informational surfaces (home, PLP)
+ *     and an empty-state UI is strictly better than a crashed Server
+ *     Component. Detail-shaped fetchers (`getProductById`) keep throwing
+ *     because a missing product IS the signal that drives `notFound()` /
+ *     the PDP error boundary.
+ *
+ *   Every degradation is logged with full stack so observability is intact.
  */
 
 export { ApiError } from "@/shared/api/errors";
@@ -39,6 +47,14 @@ function logBuildFailure(label: string, err: unknown): void {
   console.warn(
     `[build] ${label} upstream failed; degrading to empty payload for prerender.`,
     err instanceof Error ? err.message : err,
+  );
+}
+
+function logRuntimeFailure(label: string, err: unknown): void {
+  // eslint-disable-next-line no-console
+  console.error(
+    `[runtime] ${label} upstream failed; degrading to empty payload.`,
+    err instanceof Error ? { message: err.message, stack: err.stack } : err,
   );
 }
 
@@ -72,9 +88,10 @@ export const getCategories = cache(async (): Promise<readonly Category[]> => {
   } catch (err) {
     if (isBuildPhase()) {
       logBuildFailure("getCategories", err);
-      return [];
+    } else {
+      logRuntimeFailure("getCategories", err);
     }
-    throw err;
+    return [];
   }
 });
 
@@ -95,9 +112,10 @@ export const getAllProducts = cache(async (): Promise<readonly Product[]> => {
   } catch (err) {
     if (isBuildPhase()) {
       logBuildFailure("getAllProducts", err);
-      return [];
+    } else {
+      logRuntimeFailure("getAllProducts", err);
     }
-    throw err;
+    return [];
   }
 });
 
