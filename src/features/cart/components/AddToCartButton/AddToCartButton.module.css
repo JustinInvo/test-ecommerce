@@ -1,0 +1,81 @@
+.root {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.qty {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.qtyBtn {
+  width: 36px;
+  height: 44px;
+  background: transparent;
+  border: 0;
+  font-size: var(--fs-18);
+  color: var(--color-text);
+}
+
+.qtyBtn:disabled {
+  color: var(--color-text-soft);
+  cursor: not-allowed;
+}
+
+.qtyBtn:hover:not(:disabled) {
+  background: var(--color-primary-50);
+  color: var(--color-primary);
+}
+
+.qtyInput {
+  width: 44px;
+  border: 0;
+  text-align: center;
+  background: transparent;
+  font: inherit;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.qtyInput::-webkit-outer-spin-button,
+.qtyInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.add {
+  height: 44px;
+  padding: 0 var(--space-6);
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  color: var(--color-text-inverse);
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition:
+    background var(--duration-fast) var(--easing-standard),
+    transform var(--duration-fast) var(--easing-standard);
+}
+
+.add:hover:not(:disabled) {
+  background: var(--color-primary-600);
+}
+
+.add:disabled {
+  background: var(--color-text-soft);
+  border-color: var(--color-text-soft);
+  cursor: not-allowed;
+}
+
+.add[data-state="added"] {
+  background: var(--color-success);
+  border-color: var(--color-success);
+}

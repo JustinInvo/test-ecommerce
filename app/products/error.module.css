@@ -1,0 +1,27 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: var(--space-16) var(--space-4);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--fs-24);
+  color: var(--color-text);
+}
+
+.message {
+  margin: 0;
+  max-width: 520px;
+  color: var(--color-text-muted);
+}
+
+.digest {
+  margin-top: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-12);
+  color: var(--color-text-soft);
+}

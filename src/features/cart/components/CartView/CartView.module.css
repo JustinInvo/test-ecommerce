@@ -1,0 +1,239 @@
+.layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    grid-template-columns: 1fr 320px;
+    align-items: start;
+  }
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.line {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.thumb {
+  position: relative;
+  width: 96px;
+  aspect-ratio: 1 / 1;
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.thumbImg {
+  object-fit: contain;
+  padding: var(--space-2);
+}
+
+.lineBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.lineTitle {
+  font-weight: 600;
+  color: var(--color-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lineMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  color: var(--color-text-muted);
+  font-size: var(--fs-14);
+  gap: var(--space-3);
+}
+
+.unit {
+  font-variant-numeric: tabular-nums;
+}
+
+.subtotal {
+  font-weight: 700;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.qtyLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-14);
+  color: var(--color-text-muted);
+}
+
+.qtyInput {
+  width: 64px;
+  height: 36px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.qtyInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.remove {
+  background: transparent;
+  border: 0;
+  padding: var(--space-2);
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.remove:hover {
+  text-decoration: underline;
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  position: sticky;
+  top: calc(var(--header-h) + var(--space-4));
+}
+
+.summaryTitle {
+  margin: 0;
+  font-size: var(--fs-18);
+}
+
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-16);
+  font-weight: 600;
+}
+
+.summaryAmt {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
+}
+
+.smallNote {
+  margin: 0;
+  font-size: var(--fs-12);
+  color: var(--color-text-soft);
+}
+
+.checkout {
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-weight: 700;
+  border: 1px solid var(--color-primary);
+}
+
+.checkout:disabled {
+  background: var(--color-text-soft);
+  border-color: var(--color-text-soft);
+  cursor: not-allowed;
+}
+
+.clear {
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+}
+
+.clear:hover {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: var(--space-12);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: var(--fs-20);
+}
+
+.muted {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.cta {
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-weight: 700;
+}
+
+.cta:hover {
+  background: var(--color-primary-600);
+}
+
+.error {
+  padding: var(--space-4);
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+}
+
+.link {
+  background: transparent;
+  border: 0;
+  color: var(--color-danger);
+  font-weight: 700;
+  text-decoration: underline;
+}
