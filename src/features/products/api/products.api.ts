@@ -19,10 +19,28 @@ import { asCategory } from "../types/product";
  *   `'use cache'`         <- cross-request memoization (Cache Components)
  *    + cacheLife/Tag      <- TTL + targeted invalidation
  *    + React cache()      <- per-request memoization (metadata + page share one fetch)
+ *
+ * Build-time resilience:
+ *   FakeStore sometimes 403s build IPs (CI/CD, Vercel, etc.). We refuse to
+ *   let a transient upstream issue break a deploy. During the production
+ *   build phase only, failures are logged and the function returns an empty
+ *   payload so prerender succeeds. At runtime, errors throw normally and are
+ *   caught by `error.tsx` boundaries (so users still see a real error UI
+ *   with Retry instead of stale empty data).
  */
 
-/** Re-export so legacy importers in the codebase keep working. */
 export { ApiError } from "@/shared/api/errors";
+
+const isBuildPhase = (): boolean =>
+  process.env.NEXT_PHASE === "phase-production-build";
+
+function logBuildFailure(label: string, err: unknown): void {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[build] ${label} upstream failed; degrading to empty payload for prerender.`,
+    err instanceof Error ? err.message : err,
+  );
+}
 
 function assertProduct(value: unknown): asserts value is Product {
   if (
@@ -45,11 +63,19 @@ export const getCategories = cache(async (): Promise<readonly Category[]> => {
   cacheLife(CACHE_PROFILES.categories);
   cacheTag(CACHE_TAGS.categories);
 
-  const data = await httpServer<unknown>(endpoints.categories());
-  if (!Array.isArray(data) || data.some((v) => typeof v !== "string")) {
-    throw new ApiError("Malformed categories payload", 502, endpoints.categories());
+  try {
+    const data = await httpServer<unknown>(endpoints.categories());
+    if (!Array.isArray(data) || data.some((v) => typeof v !== "string")) {
+      throw new ApiError("Malformed categories payload", 502, endpoints.categories());
+    }
+    return (data as string[]).map(asCategory);
+  } catch (err) {
+    if (isBuildPhase()) {
+      logBuildFailure("getCategories", err);
+      return [];
+    }
+    throw err;
   }
-  return (data as string[]).map(asCategory);
 });
 
 /* -------------------------------- Products --------------------------------- */
@@ -59,12 +85,20 @@ export const getAllProducts = cache(async (): Promise<readonly Product[]> => {
   cacheLife(CACHE_PROFILES.products);
   cacheTag(CACHE_TAGS.products);
 
-  const data = await httpServer<unknown>(endpoints.productsList());
-  if (!Array.isArray(data)) {
-    throw new ApiError("Malformed products payload", 502, endpoints.productsList());
+  try {
+    const data = await httpServer<unknown>(endpoints.productsList());
+    if (!Array.isArray(data)) {
+      throw new ApiError("Malformed products payload", 502, endpoints.productsList());
+    }
+    data.forEach(assertProduct);
+    return data as Product[];
+  } catch (err) {
+    if (isBuildPhase()) {
+      logBuildFailure("getAllProducts", err);
+      return [];
+    }
+    throw err;
   }
-  data.forEach(assertProduct);
-  return data as Product[];
 });
 
 export const getProductById = cache(
@@ -73,10 +107,18 @@ export const getProductById = cache(
     cacheLife(CACHE_PROFILES.productDetail);
     cacheTag(CACHE_TAGS.productById(id));
 
-    const data = await httpServerNullable<unknown>(endpoints.productById(id));
-    if (data === null) return null;
-    assertProduct(data);
-    return data;
+    try {
+      const data = await httpServerNullable<unknown>(endpoints.productById(id));
+      if (data === null) return null;
+      assertProduct(data);
+      return data;
+    } catch (err) {
+      if (isBuildPhase()) {
+        logBuildFailure(`getProductById(${id})`, err);
+        return null;
+      }
+      throw err;
+    }
   },
 );
 

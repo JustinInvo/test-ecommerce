@@ -393,3 +393,16 @@ Pinterest reads these as Rich Pin data; Facebook Commerce reads `product:*`.
 ### SmartLink (hover prefetch)
 
 `src/shared/components/SmartLink/SmartLink.tsx` is a drop-in `next/link` replacement that schedules `router.prefetch(href)` after an 80 ms hover debounce, cancels on `mouseleave`, and prefetches immediately on `touchstart`. Wired into `ProductCard` so PDPs feel instant. Layered on top of Next's viewport-based prefetching - this one is intent-based.
+
+---
+
+## Vercel build-time resilience
+
+FakeStore occasionally returns `403` to cloud build IPs. We refuse to let that break a deploy. The api wrappers (`getCategories`, `getAllProducts`, `getProductById`) detect `process.env.NEXT_PHASE === "phase-production-build"` and, on upstream failure, return an empty payload + a warning log instead of throwing. At runtime they throw as usual and `error.tsx` handles the rest.
+
+Why this is the right call:
+- Deploys do not gate on third-party availability.
+- The first real request fills the cache from the live API.
+- Real runtime failures still surface to users (we do not silently serve empty data outside the build phase).
+
+If your build still fails, delete `.next/` and rebuild so stale `.next/types/routes.d.ts` regenerates for new routes (`/checkout`, `/cart`).

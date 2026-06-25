@@ -269,3 +269,12 @@ npm run dev         # http://localhost:3000
 - `SmartLink` schedules `router.prefetch(href)` after an 80 ms hover debounce, cancels it on `mouseleave`, and prefetches immediately on `touchstart` (mobile cannot hover).
 - Layered on top of Next's built-in viewport prefetching - intent prefetch warms cards the user is *about* to click, even when they scrolled past them quickly.
 - Wired into ProductCard. PDP, recommended rail and home featured cards all benefit automatically.
+
+## 19. Build-time resilience (Vercel 403 fix)
+
+- Symptom: `npm run build` on Vercel fails because FakeStore returns `403` to build IPs (sometimes throttles cloud egress). Stack trace pointed to `http.server.ts` -> `getAllProducts()` during prerender of `/`.
+- Fix: `getCategories` / `getAllProducts` / `getProductById` now catch upstream errors and, **only during `phase-production-build`**, log a warning and return an empty payload so prerender succeeds. At runtime the same calls throw and `error.tsx` renders the friendly UI + Retry.
+- Why this is the right choice:
+  - A deploy must never break because of a transient upstream issue. CDN + cache will fill on first real request.
+  - User-visible failures at runtime still surface (we DO throw at runtime), so we never silently serve empty data to real users.
+  - The build emits a clear `[build] getAllProducts upstream failed; ...` warning so the team can investigate without losing the release window.
