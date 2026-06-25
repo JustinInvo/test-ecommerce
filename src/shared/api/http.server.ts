@@ -6,25 +6,39 @@ import { ApiError } from "./errors";
  *
  * Wraps fetch to:
  *   - normalize errors into ApiError;
- *   - opt out of the per-request memo cache (Cache Components owns caching
- *     via the `'use cache'` directive in callers).
+ *   - enforce a hard timeout so a hanging upstream can never freeze a
+ *     serverless function (Vercel kills the lambda after the function timeout
+ *     and the client just sees a 500 with no useful digest);
+ *   - delegate caching to the Cache Components layer via `'use cache'` in
+ *     callers - we no longer pass `cache: "no-store"` because that directive
+ *     conflicts with `'use cache'` in Next 16 and silently disables caching.
  *
  * Intentionally tiny - it should never grow business logic. SRP: transport only.
  */
+
+/** Upstream timeout. FakeStore should answer in <1s; 8s is generous. */
+const HTTP_TIMEOUT_MS = 8_000;
+
+function timeoutSignal(ms: number): AbortSignal {
+  // AbortSignal.timeout is available in Node 18+ (Vercel runs >=18).
+  return AbortSignal.timeout(ms);
+}
+
 export async function httpServer<T>(url: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
     res = await fetch(url, {
-      cache: "no-store",
+      signal: init?.signal ?? timeoutSignal(HTTP_TIMEOUT_MS),
       headers: { Accept: "application/json", ...(init?.headers ?? {}) },
       ...init,
     });
   } catch (err) {
-    throw new ApiError(
-      `Network error fetching ${url}: ${(err as Error).message}`,
-      0,
-      url,
-    );
+    const e = err as Error & { name?: string };
+    const reason =
+      e?.name === "TimeoutError" || e?.name === "AbortError"
+        ? `Timeout after ${HTTP_TIMEOUT_MS}ms`
+        : e?.message ?? "Unknown network error";
+    throw new ApiError(`Network error fetching ${url}: ${reason}`, 0, url);
   }
   if (!res.ok) {
     throw new ApiError(`Upstream ${res.status} for ${url}`, res.status, url);
@@ -40,16 +54,17 @@ export async function httpServerNullable<T>(
   let res: Response;
   try {
     res = await fetch(url, {
-      cache: "no-store",
+      signal: init?.signal ?? timeoutSignal(HTTP_TIMEOUT_MS),
       headers: { Accept: "application/json", ...(init?.headers ?? {}) },
       ...init,
     });
   } catch (err) {
-    throw new ApiError(
-      `Network error fetching ${url}: ${(err as Error).message}`,
-      0,
-      url,
-    );
+    const e = err as Error & { name?: string };
+    const reason =
+      e?.name === "TimeoutError" || e?.name === "AbortError"
+        ? `Timeout after ${HTTP_TIMEOUT_MS}ms`
+        : e?.message ?? "Unknown network error";
+    throw new ApiError(`Network error fetching ${url}: ${reason}`, 0, url);
   }
   if (res.status === 404) return null;
   if (!res.ok) {
