@@ -20,9 +20,19 @@ export const CACHE_PROFILES = {
   categories: { stale: 300, revalidate: 3600, expire: 21600 },
 } as const;
 
+/**
+ * Cache tag namespace.
+ *
+ * Tags are versioned (`:v2`) so the next deploy after a cache-bug fix starts
+ * with a CLEAN cache - otherwise the new build inherits any empty payload
+ * that an older broken build cached for hours.
+ *
+ * Bump the suffix any time the shape of a cached payload changes, or to
+ * force-purge a polluted cache without waiting for `expire` to elapse.
+ */
 export const CACHE_TAGS = {
-  products: "products",
-  productById: (id: number | string) => `product:${id}`,
-  productsByCategory: (cat: string) => `products:${cat.toLowerCase()}`,
-  categories: "categories",
+  products: "products:v2",
+  productById: (id: number | string) => `product:v2:${id}`,
+  productsByCategory: (cat: string) => `products:v2:${cat.toLowerCase()}`,
+  categories: "categories:v2",
 } as const;

@@ -8,6 +8,7 @@ import { ProductCard } from "@/features/products/components/ProductCard/ProductC
 import { ProductGridSkeleton } from "@/features/products/components/ProductGridSkeleton/ProductGridSkeleton";
 import { RecommendedProducts } from "@/features/recommendations/components/RecommendedProducts/RecommendedProducts";
 import { formatCategoryLabel } from "@/features/products/utils/format";
+import { EmptyState } from "@/shared/components/EmptyState/EmptyState";
 import { site } from "@/shared/config/site";
 import styles from "./page.module.css";
 
@@ -65,6 +66,26 @@ export default function HomePage() {
 
 async function CategoriesStrip() {
   const categories = await getCategories();
+
+  if (categories.length === 0) {
+    return (
+      <EmptyState
+        variant="strip"
+        title="Categories are warming up"
+        message="We could not load the catalog tree right now. The full catalog is still available."
+        cta={{ href: "/products", label: "Browse all products" }}
+        icon={
+          <svg viewBox="0 0 64 64" width="40" height="40" aria-hidden="true">
+            <rect x="8" y="8" width="20" height="20" rx="3" fill="none" stroke="currentColor" strokeWidth="3" />
+            <rect x="36" y="8" width="20" height="20" rx="3" fill="none" stroke="currentColor" strokeWidth="3" />
+            <rect x="8" y="36" width="20" height="20" rx="3" fill="none" stroke="currentColor" strokeWidth="3" />
+            <rect x="36" y="36" width="20" height="20" rx="3" fill="none" stroke="currentColor" strokeWidth="3" />
+          </svg>
+        }
+      />
+    );
+  }
+
   return (
     <ul className={styles.catList}>
       {categories.map((c) => (
@@ -83,6 +104,29 @@ async function CategoriesStrip() {
 
 async function FeaturedStrip() {
   const products = await getAllProducts();
+
+  if (products.length === 0) {
+    return (
+      <EmptyState
+        variant="card"
+        title="Featured picks coming soon"
+        message="We could not reach the catalog right now. Try again in a moment or browse all products."
+        cta={{ href: "/products", label: "Explore the catalog" }}
+        icon={
+          <svg viewBox="0 0 64 64" width="44" height="44" aria-hidden="true">
+            <path
+              d="M32 6l7.5 15.5L56 24l-12 11.5L47 52 32 44l-15 8 3-16.5L8 24l16.5-2.5L32 6z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinejoin="round"
+            />
+          </svg>
+        }
+      />
+    );
+  }
+
   const featured = [...products]
     .sort(
       (a, b) =>
@@ -90,6 +134,7 @@ async function FeaturedStrip() {
         a.rating.rate * Math.log10(a.rating.count + 1),
     )
     .slice(0, 4);
+
   return (
     <ul className={styles.featured}>
       {featured.map((p, i) => (
