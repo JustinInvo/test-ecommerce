@@ -1,7 +1,7 @@
 import Image from "next/image";
-import Link from "next/link";
 import type { Product } from "../../types/product";
 import { formatPrice, formatCategoryLabel, truncate } from "../../utils/format";
+import { SmartLink } from "@/shared/components/SmartLink/SmartLink";
 import styles from "./ProductCard.module.css";
 
 interface ProductCardProps {
@@ -13,17 +13,13 @@ interface ProductCardProps {
 /**
  * Catalog product card. Server-rendered HTML.
  *
- * Performance choices:
- *  - `next/image` with explicit width/height + `sizes` so the browser picks
- *    the right resource and the layout reserves the right space (no CLS).
- *  - Only the first card receives `priority` so we don't fight with above-
- *    the-fold prioritization across the grid.
- *  - Card is a single `<Link>` so the whole tile is a click target (better
- *    UX, fewer DOM nodes than nested clickable areas).
+ * The outer element is a SmartLink (Client island). Server still renders the
+ * full anchor; the client only attaches hover/touch listeners for intent
+ * prefetching - PDP navigation feels instant on warm cards.
  */
 export function ProductCard({ product, priority = false }: ProductCardProps) {
   return (
-    <Link
+    <SmartLink
       href={`/products/${product.id}`}
       className={styles.card}
       aria-label={`View details for ${product.title}`}
@@ -60,6 +56,6 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
           </div>
         </div>
       </article>
-    </Link>
+    </SmartLink>
   );
 }

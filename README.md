@@ -353,3 +353,43 @@ npm run test:coverage   # with v8 coverage
 - Tests cover business flows - not artificial coverage of UI primitives.
 
 See `state.claude.md` for the living state file with the same information in a denser, working-doc format.
+
+---
+
+## Review round 2 - new modules
+
+These were added after the first round of review feedback. They keep the same SOLID principles and feature-based layering.
+
+### Centralized HTTP client + API version pattern
+
+| File                                              | Responsibility                                                                       |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `src/shared/api/config.ts`                        | `API_VERSIONS["v1"]`, `endpoints.*` catalog, `resolve()`. ONE place that knows URLs. |
+| `src/shared/api/errors.ts`                        | `ApiError` (status, url, toJSON).                                                    |
+| `src/shared/api/http.server.ts`                   | `server-only` transport (used by `products.api.ts`).                                 |
+| `src/shared/api/http.client.ts`                   | Browser-safe transport with `AbortSignal` support.                                   |
+| `src/features/products/services/products.client.service.ts` | Client-side wrappers around `http.client` + `endpoints`.                  |
+| `src/features/products/hooks/useProducts.ts`      | Client hook: loading/error/data + retry + cancel-on-unmount.                         |
+
+Endpoints are read through `endpoints.productsList()`, `endpoints.productById(id)`, `endpoints.categories()`. To roll out a `v2`, add a key to `API_VERSIONS` and pass `"v2"` to `resolve()` - no other change needed. Override base URL per environment with `NEXT_PUBLIC_API_BASE_URL`.
+
+### Cart retry bug - fixed
+
+The Retry button in `CartView` now calls `useProducts().retry()`, which bumps an internal nonce so the fetch effect actually re-runs (under a fresh `AbortController`). Previous bug: the button only cleared the local error state, and the effect's `[hydrated, items.length]` deps didn't change.
+
+### `/checkout` simulated payment
+
+`src/features/checkout/components/CheckoutView/` + `app/checkout/page.tsx`. Reads cart and product catalog, computes subtotal + 8% tax + free shipping over $50, runs a fake submit (900 ms), clears cart and shows a success state with a generated order id. Marked `robots: noindex` like `/cart`.
+
+### Open Graph - what's covered
+
+`og:*` is the protocol used by Facebook, WhatsApp, LinkedIn, Discord, Pinterest, Slack and Telegram - they all read it. Twitter has its own card (`twitter:*`), already present. The PDP now also emits:
+- `og:type=product`, `og:price:amount`, `og:price:currency`
+- `og:image` 1200x1200 + `og:image:type`
+- `product:availability`, `product:condition`, `product:retailer_item_id`, `product:category`
+
+Pinterest reads these as Rich Pin data; Facebook Commerce reads `product:*`.
+
+### SmartLink (hover prefetch)
+
+`src/shared/components/SmartLink/SmartLink.tsx` is a drop-in `next/link` replacement that schedules `router.prefetch(href)` after an 80 ms hover debounce, cancels on `mouseleave`, and prefetches immediately on `touchstart`. Wired into `ProductCard` so PDPs feel instant. Layered on top of Next's viewport-based prefetching - this one is intent-based.

@@ -236,14 +236,36 @@ npm run dev         # http://localhost:3000
 
 ## 13b. Runtime fix log
 
-- **Next 16 forbids `next/dynamic({ ssr: false })` in Server Components.** Was used in `app/page.tsx`, `app/products/page.tsx`, `app/cart/page.tsx`, `src/shared/components/Header/Header.tsx` to defer client islands. Fix: replaced with direct imports. The Client Components themselves already carry `"use client"`, so React handles the boundary correctly — Server-rendered shell + client hydration. Simpler, same JS-size outcome for these particular islands (Next still emits a separate client chunk per `"use client"` module).
+- **Next 16 forbids `next/dynamic({ ssr: false })` in Server Components.** Was used in `app/page.tsx`, `app/products/page.tsx`, `app/cart/page.tsx`, `src/shared/components/Header/Header.tsx` to defer client islands. Fix: replaced with direct imports. The Client Components 
+## 15. New modules (review round 2)
 
-## 14. Decisions log
+| Module                                              | Purpose                                                                                                                                |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/shared/api/config.ts`                          | Versioned base URL (`API_VERSIONS["v1"]`) + endpoint catalog. Single source of truth for any HTTP path in the app.                     |
+| `src/shared/api/errors.ts`                          | `ApiError` (serializable) shared by server + client transports.                                                                        |
+| `src/shared/api/http.server.ts`                     | `server-only` fetch wrapper. Used by `products.api.ts`. Owns nothing but transport.                                                    |
+| `src/shared/api/http.client.ts`                     | Browser-safe fetch wrapper. AbortController-friendly, returns typed payloads.                                                          |
+| `src/features/products/services/products.client.service.ts` | Client-side product/category fetchers that delegate to `http.client` and `endpoints.*`.                                          |
+| `src/features/products/hooks/useProducts.ts`        | Client hook: loading/error/data state + retry (nonce-bumping) + AbortController cancellation. Used by CartView and RecommendedProducts. |
+| `src/features/checkout/components/CheckoutView/`    | Simulated checkout screen with totals, fake card form, processing -> success states. Clears cart on success.                            |
+| `app/checkout/page.tsx`                             | Thin Server-Component shell hosting CheckoutView; `robots: noindex`.                                                                    |
+| `src/shared/components/SmartLink/SmartLink.tsx`     | Drop-in `next/link` replacement: debounced `router.prefetch` on hover, instant prefetch on touchstart. Wired into ProductCard.          |
 
-- **CSS Modules over Tailwind**: per brief. Enables strict per-component encapsulation and avoids class-bag bloat in a small product surface.
-- **Zustand over Redux/Context**: cart + visited are local concerns; Zustand selectors prevent re-render storms in `<Header/>`.
-- **Cart shape `{id, quantity}` only**: brief requirement. Avoids stale product data, eases future backend sync, reduces `localStorage` payload.
-- **Server-side filtering on cached snapshot**: better UX (instant) + better cache reuse than per-filter API calls.
-- **Streaming + per-segment loading.tsx**: shows shell + skeletons immediately; LCP measured against shell, not the grid.
-- **React `cache()` around `getProductById`**: dedupes the metadata + page fetch within the same request.
-- **No suspense fallback for the whole page**: layout (header) stays interactive; only the grid streams.
+## 16. Open Graph - what changed
+
+- Confirmed OG/`og:*` is the universal protocol consumed by Facebook, WhatsApp, LinkedIn, Discord, Pinterest, Slack, Telegram. No "Discord card" or "LinkedIn card" exist - they all read OG. Twitter has its own card (`twitter:*`) already present.
+- PDP `generateMetadata` now emits:
+  - `og:image` 1200x1200 + `og:image:type` (avoids LinkedIn cropping + WhatsApp square crop).
+  - `og:type=product` + `og:price:amount` / `og:price:currency` via `other` (Pinterest Rich Pin friendly, FB richer preview).
+  - `product:*` namespace (`availability`, `condition`, `retailer_item_id`, `category`) - read by FB commerce + Pinterest.
+
+## 17. Retry bug fix (cart)
+
+- Root cause: CartView's "Retry" button only cleared the local `error` state. The fetch effect had `[hydrated, items.length]` as dependencies and never re-ran.
+- Fix: introduced `useProducts` hook with an internal `retryNonce` that, on `retry()`, bumps and triggers the effect again under a fresh `AbortController`. CartView now calls `retry()` directly.
+
+## 18. Smart prefetch
+
+- `SmartLink` schedules `router.prefetch(href)` after an 80 ms hover debounce, cancels it on `mouseleave`, and prefetches immediately on `touchstart` (mobile cannot hover).
+- Layered on top of Next's built-in viewport prefetching - intent prefetch warms cards the user is *about* to click, even when they scrolled past them quickly.
+- Wired into ProductCard. PDP, recommended rail and home featured cards all benefit automatically.

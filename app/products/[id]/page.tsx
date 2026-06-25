@@ -9,12 +9,17 @@ import styles from "./page.module.css";
 /**
  * Product detail page (PDP).
  *
- *  - `params` is a Promise in Next 16 — must be awaited.
- *  - `getProductById` is wrapped in React `cache()` so `generateMetadata` and
- *    the page share a single fetch within one request.
- *  - Unknown ids resolve to `notFound()`, rendering `not-found.tsx`.
- *  - OG image is set to the product image — exactly the requirement for
- *    rich shares on WhatsApp / Facebook / LinkedIn / Discord.
+ * `params` is a Promise in Next 16 - must be awaited.
+ * `getProductById` is wrapped in React `cache()` so `generateMetadata` and
+ * the page share a single fetch within one request.
+ *
+ * OG strategy (covers Facebook, WhatsApp, LinkedIn, Discord, Pinterest,
+ * Slack, Telegram - all of which read og:* tags). Twitter has its own card.
+ *  - og:type = "product" + og:price:amount/currency for richer FB/IG link
+ *    previews and Pinterest Rich Pins.
+ *  - og:image width/height = 1200x1200 to satisfy LinkedIn's preferred ratio
+ *    and avoid square-image cropping on WhatsApp / Discord.
+ *  - twitter:card = "summary_large_image" so the product image dominates.
  */
 
 interface PageProps {
@@ -44,17 +49,21 @@ export async function generateMetadata({
     description,
     alternates: { canonical },
     openGraph: {
+      // og:type = "product" is the e-commerce-aware variant. FB / WhatsApp /
+      // LinkedIn / Discord / Pinterest all understand it and show price.
       type: "website",
       title: product.title,
       description,
       url: canonical,
       siteName: site.name,
+      locale: site.locale,
       images: [
         {
           url: product.image,
           width: 1200,
           height: 1200,
           alt: product.title,
+          type: "image/jpeg",
         },
       ],
     },
@@ -63,6 +72,21 @@ export async function generateMetadata({
       title: product.title,
       description,
       images: [product.image],
+      site: site.twitter,
+      creator: site.twitter,
+    },
+    // Extra OG / commerce fields that the Metadata type does not type out
+    // strongly. Emitted via `other` so they reach <head> verbatim.
+    other: {
+      "og:type": "product",
+      "og:price:amount": product.price.toFixed(2),
+      "og:price:currency": "USD",
+      "product:price:amount": product.price.toFixed(2),
+      "product:price:currency": "USD",
+      "product:availability": "in stock",
+      "product:condition": "new",
+      "product:retailer_item_id": String(product.id),
+      "product:category": product.category,
     },
   };
 }
