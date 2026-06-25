@@ -15,47 +15,46 @@ import { asCategory } from "../types/product";
  * owns only domain decisions: which cache profile, what tags, how to
  * validate the payload, what counts as "not found".
  *
- * IMPORTANT - two-layer composition:
+ * NEXT 16 CACHE COMPONENTS - critical detail
+ * -----------------------------------------
+ * A throw INSIDE a `'use cache'` function is fatal for prerendering even if
+ * the caller wraps it in try/catch. Next treats it as a Server Component
+ * render error and aborts the export. The build log will still show the
+ * outer catch running, but the build fails anyway with
+ * "Export encountered an error on /page". So:
  *
- *   _fetchX  -> `'use cache'`-wrapped fetcher. THROWS on any upstream
- *               failure so Cache Components never stores an empty/failed
- *               result. This was the production bug we had: a single
- *               transient 403 during build was cached for 6h and served
- *               as if it were real data.
- *
- *   getX     -> React `cache()` outer wrapper. Per-request memoization +
- *               try/catch that degrades to a safe default at the page-render
- *               boundary - never inside the cross-request cache.
+ *   - We catch INSIDE the cached function and return a safe default.
+ *   - On failure we DOWNGRADE the cacheLife to ~60s so the empty payload
+ *     is not served for hours. Next legitimate request re-hits upstream.
+ *   - We expose `getX` wrappers via `cache(...)` only for per-request memo;
+ *     they no longer need a try/catch.
  *
  * Resilience policy:
  *   - Build phase: every fetcher degrades to empty so prerender never
- *     fails the deploy. Cache fills on first real request.
+ *     fails the deploy. Cache fills on first real request after deploy.
  *   - Runtime, catalog-shaped (`getCategories`, `getAllProducts`): degrade
- *     to empty so home and PLP can render their empty states.
- *   - Runtime, detail-shaped (`getProductById`): keep throwing - a missing
- *     product IS the signal that drives `notFound()` and PDP error.tsx.
+ *     to empty so home and PLP can render their empty-state UI.
+ *   - Runtime, detail-shaped (`getProductById`): degrade to `null`. The
+ *     PDP turns `null` into `notFound()` so existing UX is preserved.
  *
- * Every degradation is logged with full stack so observability stays intact.
+ * Every degradation is logged with the full error so observability stays
+ * intact (Vercel runtime logs will surface the upstream 403/timeout).
  */
 
 export { ApiError } from "@/shared/api/errors";
 
+/** Short lifetime applied when we cache a degraded payload. */
+const FAILURE_CACHE_LIFE = { stale: 10, revalidate: 30, expire: 60 } as const;
+
 const isBuildPhase = (): boolean =>
   process.env.NEXT_PHASE === "phase-production-build";
 
-function logBuildFailure(label: string, err: unknown): void {
+function logFailure(label: string, err: unknown): void {
+  const tag = isBuildPhase() ? "[build]" : "[runtime]";
   // eslint-disable-next-line no-console
   console.warn(
-    `[build] ${label} upstream failed; degrading to empty payload for prerender.`,
+    `${tag} ${label} upstream failed; degrading to empty payload.`,
     err instanceof Error ? err.message : err,
-  );
-}
-
-function logRuntimeFailure(label: string, err: unknown): void {
-  // eslint-disable-next-line no-console
-  console.error(
-    `[runtime] ${label} upstream failed; degrading to empty payload.`,
-    err instanceof Error ? { message: err.message, stack: err.stack } : err,
   );
 }
 
@@ -80,34 +79,31 @@ async function _fetchCategories(): Promise<readonly Category[]> {
   cacheLife(CACHE_PROFILES.categories);
   cacheTag(CACHE_TAGS.categories);
 
-  const data = await httpServer<unknown>(endpoints.categories());
-  if (
-    !Array.isArray(data) ||
-    data.length === 0 ||
-    data.some((v) => typeof v !== "string")
-  ) {
-    // Treat empty / malformed as failure so the cache stays clean.
-    throw new ApiError(
-      "Malformed or empty categories payload",
-      502,
-      endpoints.categories(),
-    );
-  }
-  return (data as string[]).map(asCategory);
-}
-
-export const getCategories = cache(async (): Promise<readonly Category[]> => {
   try {
-    return await _fetchCategories();
-  } catch (err) {
-    if (isBuildPhase()) {
-      logBuildFailure("getCategories", err);
-    } else {
-      logRuntimeFailure("getCategories", err);
+    const data = await httpServer<unknown>(endpoints.categories());
+    if (
+      !Array.isArray(data) ||
+      data.length === 0 ||
+      data.some((v) => typeof v !== "string")
+    ) {
+      throw new ApiError(
+        "Malformed or empty categories payload",
+        502,
+        endpoints.categories(),
+      );
     }
+    return (data as string[]).map(asCategory);
+  } catch (err) {
+    // Downgrade the cache lifetime so this empty payload only sticks for ~60s.
+    cacheLife(FAILURE_CACHE_LIFE);
+    logFailure("getCategories", err);
     return [];
   }
-});
+}
+
+export const getCategories = cache(
+  async (): Promise<readonly Category[]> => _fetchCategories(),
+);
 
 /* -------------------------------- Products --------------------------------- */
 
@@ -116,56 +112,49 @@ async function _fetchAllProducts(): Promise<readonly Product[]> {
   cacheLife(CACHE_PROFILES.products);
   cacheTag(CACHE_TAGS.products);
 
-  const data = await httpServer<unknown>(endpoints.productsList());
-  if (!Array.isArray(data) || data.length === 0) {
-    throw new ApiError(
-      "Malformed or empty products payload",
-      502,
-      endpoints.productsList(),
-    );
-  }
-  data.forEach(assertProduct);
-  return data as Product[];
-}
-
-export const getAllProducts = cache(async (): Promise<readonly Product[]> => {
   try {
-    return await _fetchAllProducts();
-  } catch (err) {
-    if (isBuildPhase()) {
-      logBuildFailure("getAllProducts", err);
-    } else {
-      logRuntimeFailure("getAllProducts", err);
+    const data = await httpServer<unknown>(endpoints.productsList());
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new ApiError(
+        "Malformed or empty products payload",
+        502,
+        endpoints.productsList(),
+      );
     }
+    data.forEach(assertProduct);
+    return data as Product[];
+  } catch (err) {
+    cacheLife(FAILURE_CACHE_LIFE);
+    logFailure("getAllProducts", err);
     return [];
   }
-});
+}
+
+export const getAllProducts = cache(
+  async (): Promise<readonly Product[]> => _fetchAllProducts(),
+);
 
 async function _fetchProductById(id: number): Promise<Product | null> {
   "use cache";
   cacheLife(CACHE_PROFILES.productDetail);
   cacheTag(CACHE_TAGS.productById(id));
 
-  const data = await httpServerNullable<unknown>(endpoints.productById(id));
-  if (data === null) return null;
-  assertProduct(data);
-  return data;
+  try {
+    const data = await httpServerNullable<unknown>(endpoints.productById(id));
+    if (data === null) return null;
+    assertProduct(data);
+    return data;
+  } catch (err) {
+    cacheLife(FAILURE_CACHE_LIFE);
+    logFailure(`getProductById(${id})`, err);
+    // Returning null instead of throwing so prerender never fails. The PDP
+    // converts null -> notFound() which renders our custom not-found page.
+    return null;
+  }
 }
 
 export const getProductById = cache(
-  async (id: number): Promise<Product | null> => {
-    try {
-      return await _fetchProductById(id);
-    } catch (err) {
-      if (isBuildPhase()) {
-        logBuildFailure(`getProductById(${id})`, err);
-        return null;
-      }
-      // PDP keeps strict semantics: rethrow so `notFound()` / error.tsx can
-      // do their job. Empty/null product is a different signal than failure.
-      throw err;
-    }
-  },
+  async (id: number): Promise<Product | null> => _fetchProductById(id),
 );
 
 export const getProductsByCategory = cache(
